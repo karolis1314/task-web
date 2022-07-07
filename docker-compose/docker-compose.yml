@@ -1,0 +1,22 @@
+version: '3'
+services:
+    web:
+        image: nginx:latest
+        ports:
+            - "8080:80"
+        volumes:
+            - ../src:/src
+            - ../config/default.conf:/etc/nginx/conf.d/default.conf
+        networks:
+            - src-network
+        links:
+          - php
+    php:
+        image: php:fpm
+        volumes:
+            - ../src:/src
+        networks:
+            - src-network
+networks:
+    src-network:
+        driver: bridge

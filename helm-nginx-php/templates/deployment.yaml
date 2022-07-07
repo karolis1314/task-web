@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "helm-nginx-php.fullname" . }}-nginx
+  labels:
+  {{- include "helm-nginx-php.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.nginx.replicas }}
+  selector:
+    matchLabels:
+      app: nginx
+    {{- include "helm-nginx-php.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app: nginx
+      {{- include "helm-nginx-php.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - env:
+        - name: KUBERNETES_CLUSTER_DOMAIN
+          value: {{ .Values.kubernetesClusterDomain }}
+        image: {{ .Values.nginx.phpfpm.image.repository }}:{{ .Values.nginx.phpfpm.image.tag
+          | default .Chart.AppVersion }}
+        imagePullPolicy: IfNotPresent
+        lifecycle:
+          postStart:
+            exec:
+              command: ["/bin/sh","-c","echo '<?php \nphpinfo();' > '/var/www/nginx-php-app/index.php'; chmod -R 755 /var/www/nginx-php-app;"]
+        name: phpfpm
+        ports:
+        - containerPort: 9000
+          name: http
+          protocol: TCP
+        resources: {{- toYaml .Values.nginx.phpfpm.resources | nindent 10 }}
+        volumeMounts:
+        - mountPath: /var/www/nginx-php-app
+          name: index
+      - env:
+        - name: KUBERNETES_CLUSTER_DOMAIN
+          value: {{ .Values.kubernetesClusterDomain }}
+        image: {{ .Values.nginx.nginx.image.repository }}:{{ .Values.nginx.nginx.image.tag
+          | default .Chart.AppVersion }}
+        name: nginx
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+        resources: {{- toYaml .Values.nginx.nginx.resources | nindent 10 }}
+        volumeMounts:
+        - mountPath: /var/www/nginx-php-app
+          name: index
+        - mountPath: /etc/nginx/nginx.conf
+          name: nginx-config-volume
+          subPath: nginx.conf
+      terminationGracePeriodSeconds: 60
+      volumes:
+      - name: index
+        persistentVolumeClaim:
+          claimName: {{ include "helm-nginx-php.fullname" . }}-pv-karolis-task
+      - configMap:
+          name: {{ include "helm-nginx-php.fullname" . }}-nginx-config
+        name: nginx-config-volume

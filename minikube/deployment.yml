@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: nginx-php
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 33%
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: phpfpm
+          image: php:fpm
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9000
+              name: http
+              protocol: TCP
+          resources:
+            requests:
+              memory: 200Mi
+              cpu: "0.12"
+            limits:
+              memory: 300Mi
+              cpu: "0.25"
+          volumeMounts:
+            - name: index
+              mountPath: /var/www/nginx-php-app
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  [
+                    "/bin/sh",
+                    "-c",
+                    "echo '<?php \nphpinfo();' > '/var/www/nginx-php-app/index.php'; chmod -R 755 /var/www/nginx-php-app;",
+                  ]
+        - name: nginx
+          image: nginx:alpine
+          resources:
+            requests:
+              memory: 200Mi
+              cpu: "0.12"
+            limits:
+              memory: 300Mi
+              cpu: "0.25"
+          ports:
+            - containerPort: 80
+              name: http
+              protocol: TCP
+          volumeMounts:
+            - name: index
+              mountPath: /var/www/nginx-php-app
+            - name: nginx-config-volume
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+      volumes:
+        - name: index
+          persistentVolumeClaim:
+            claimName: pv-karolis-task
+        - name: nginx-config-volume
+          configMap:
+            name: nginx-config
